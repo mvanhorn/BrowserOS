@@ -51,6 +51,16 @@ import { track } from '@/lib/metrics/track'
 import { refinePrompt } from '@/lib/schedules/refine-prompt'
 import type { ScheduledJob } from './types'
 
+const DAYS_OF_WEEK = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
+
 const formSchema = z
   .object({
     name: z
@@ -58,18 +68,29 @@ const formSchema = z
       .min(1, 'Name is required')
       .max(100, 'Name must be 100 characters or less'),
     query: z.string().min(1, 'Prompt is required'),
-    scheduleType: z.enum(['daily', 'hourly', 'minutes']),
+    scheduleType: z.enum(['daily', 'hourly', 'minutes', 'weekly']),
     scheduleTime: z.string().optional(),
     scheduleInterval: z.number().int().min(1).max(60).optional(),
+    dayOfWeek: z.number().int().min(0).max(6).optional(),
     providerId: z.string().optional(),
     enabled: z.boolean(),
   })
   .superRefine((data, ctx) => {
-    if (data.scheduleType === 'daily' && !data.scheduleTime) {
+    if (
+      (data.scheduleType === 'daily' || data.scheduleType === 'weekly') &&
+      !data.scheduleTime
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Time is required for daily schedule',
+        message: 'Time is required for this schedule',
         path: ['scheduleTime'],
+      })
+    }
+    if (data.scheduleType === 'weekly' && data.dayOfWeek === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Day is required for weekly schedule',
+        path: ['dayOfWeek'],
       })
     }
     if (
@@ -111,6 +132,7 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
       scheduleType: 'daily',
       scheduleTime: '09:00',
       scheduleInterval: 1,
+      dayOfWeek: 1,
       providerId: undefined,
       enabled: true,
     },
@@ -147,6 +169,7 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
           scheduleType: initialValues.scheduleType,
           scheduleTime: initialValues.scheduleTime || '09:00',
           scheduleInterval: initialValues.scheduleInterval || 1,
+          dayOfWeek: initialValues.dayOfWeek ?? 1,
           providerId: initialValues.providerId,
           enabled: initialValues.enabled,
         })
@@ -157,6 +180,7 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
           scheduleType: 'daily',
           scheduleTime: '09:00',
           scheduleInterval: 1,
+          dayOfWeek: 1,
           providerId: undefined,
           enabled: true,
         })
@@ -257,9 +281,17 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
       query: values.query.trim(),
       scheduleType: values.scheduleType,
       scheduleTime:
-        values.scheduleType === 'daily' ? values.scheduleTime : undefined,
+        values.scheduleType === 'daily' || values.scheduleType === 'weekly'
+          ? values.scheduleTime
+          : undefined,
       scheduleInterval:
-        values.scheduleType !== 'daily' ? values.scheduleInterval : undefined,
+        values.scheduleType === 'hourly' || values.scheduleType === 'minutes'
+          ? values.scheduleInterval
+          : undefined,
+      dayOfWeek:
+        values.scheduleType === 'weekly'
+          ? (values.dayOfWeek as ScheduledJob['dayOfWeek'])
+          : undefined,
       providerId: provider?.id,
       enabled: values.enabled,
     })
@@ -411,6 +443,7 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="daily">Daily at time</SelectItem>
+                        <SelectItem value="weekly">Weekly at time</SelectItem>
                         <SelectItem value="hourly">Every N hours</SelectItem>
                         <SelectItem value="minutes">Every N minutes</SelectItem>
                       </SelectContent>
@@ -420,7 +453,37 @@ export const NewScheduledTaskDialog: FC<NewScheduledTaskDialogProps> = ({
                 )}
               />
 
-              {scheduleType === 'daily' ? (
+              {scheduleType === 'weekly' && (
+                <FormField
+                  control={form.control}
+                  name="dayOfWeek"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Day</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(Number(value))}
+                        value={String(field.value ?? 1)}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select day" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {DAYS_OF_WEEK.map((day, index) => (
+                            <SelectItem key={day} value={String(index)}>
+                              {day}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {scheduleType === 'daily' || scheduleType === 'weekly' ? (
                 <FormField
                   control={form.control}
                   name="scheduleTime"
