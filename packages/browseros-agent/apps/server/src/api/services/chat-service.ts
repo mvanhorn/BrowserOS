@@ -100,6 +100,7 @@ export class ChatService {
         : undefined,
       isNewConversation: isFirstTurn,
       resourcesDir: this.deps.resourcesDir,
+      requestTimeoutMs: request.requestTimeoutMs,
     }
 
     let isNewSession = false
