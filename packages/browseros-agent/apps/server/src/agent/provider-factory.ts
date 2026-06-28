@@ -276,7 +276,7 @@ function createRequestTimeoutFetch(
     return undefined
   }
 
-  return async (input, init) => {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const timeoutSignal = AbortSignal.timeout(requestTimeoutMs)
     const signal = init?.signal
       ? AbortSignal.any([init.signal, timeoutSignal])
@@ -286,7 +286,7 @@ function createRequestTimeoutFetch(
       ...init,
       signal,
     })
-  }
+  }) as typeof globalThis.fetch
 }
 
 function createAnthropicFactory(
